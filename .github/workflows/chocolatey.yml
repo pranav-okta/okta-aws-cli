@@ -1,14 +1,15 @@
 name: Chocolatey Deploy
 
-# This GH action will push a okta-aws-cli build to chocolatey.org when a
-# okta-aws-cli GH release is completed.
+# This workflow runs after the release workflow completes successfully,
+# ensuring release assets are available before packaging for Chocolatey.
 #
 # inspired by https://github.com/rcmaehl/MSEdgeRedirect thank you rcmaehl 🙏🙏🙏
 
 on:
-  release:
+  workflow_run:
+    workflows: ["release"]
     types:
-      - published
+      - completed
 
 defaults:
   run:
@@ -17,6 +18,8 @@ defaults:
 jobs:
   chocolatey:
     runs-on: windows-latest
+    # Only run if the release workflow succeeded and was triggered by a tag
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,24 +46,10 @@ jobs:
           filename="okta-aws-cli_${{ steps.version.outputs.nuget }}_windows_386.zip"
           url="https://github.com/${{ github.repository }}/releases/download/${{ steps.latesttag.outputs.tag }}/${filename}"
 
-          # Retry download with exponential backoff to handle release asset propagation delay
-          download_success=false
-          for i in 1 2 3 4 5; do
-            echo "Download attempt $i..."
-            if curl -sSL --fail "${url}" -o "nuspec/chocolatey/tools/okta-aws-cli.zip"; then
-              download_success=true
-              break
-            fi
-            echo "Download failed, waiting $((i * 30)) seconds before retry..."
-            sleep $((i * 30))
-          done
+          echo "Downloading ${url}..."
+          curl -sSL --fail "${url}" -o "nuspec/chocolatey/tools/okta-aws-cli.zip"
 
-          if [ "$download_success" != "true" ]; then
-            echo "ERROR: Failed to download release asset after 5 attempts"
-            exit 1
-          fi
-
-          # Verify the downloaded file is a valid zip archive (zip files start with "PK")
+          # Verify the downloaded file is a valid zip archive
           if [ "$(head -c 2 "nuspec/chocolatey/tools/okta-aws-cli.zip")" != "PK" ]; then
             echo "ERROR: Downloaded file is not a valid zip archive"
             exit 1
@@ -88,4 +77,3 @@ jobs:
         uses: crazy-max/ghaction-chocolatey@v3
         with:
           args: push nuspec/chocolatey/okta-aws-cli.${{ steps.version.outputs.nuget }}.nupkg -s https://push.chocolatey.org/ -k ${{ secrets.CHOCO_API_KEY }}
-

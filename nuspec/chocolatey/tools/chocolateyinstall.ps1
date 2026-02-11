@@ -8,3 +8,19 @@ Get-ChocolateyUnzip -FileFullPath $zipPath -Destination $toolsDir -PackageName $
 # Clean up the zip after extraction
 Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
